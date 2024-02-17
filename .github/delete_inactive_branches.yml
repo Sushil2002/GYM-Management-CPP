@@ -1,46 +1,48 @@
 name: Delete inactive branches
-​
+
 on:
   schedule:
     - cron: '0 0 * * *' # Runs every day at midnight
-​
+
 jobs:
   delete_inactive_branches:
-    runs-on: ubuntu-latest
-​
+    runs-on: windows-latest
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-​
+
     - name: List branches
-      run: git branch -r --format='%(committerdate:iso8601) %(refname:short)' --sort='-committerdate'
-​
+      run: git branch -r --format="%(committerdate:iso8601) %(refname:short)" --sort="-committerdate"
+
     - name: Read excluded branches from file
       id: read_excluded_branches
-      run: echo "::set-output name=excluded_branches::$(cat excluded_branches.txt)"
-​
+      run: |
+        Get-Content excluded_branches.txt
+
     - name: Delete inactive branches
       run: |
         # Read excluded branches from the output of the previous step
-        excluded_branches=(${{ steps.read_excluded_branches.outputs.excluded_branches }})
-​
+        $excluded_branches = ${{ steps.read_excluded_branches.outputs.excluded_branches }} -split "`r`n"
+
         # Loop through branches and delete those inactive for more than 6 months
-        while read -r branch; do
-          branch_name=$(echo "$branch" | awk '{print $2}')
-          last_commit_date=$(echo "$branch" | awk '{print $1}')
-          six_months_ago=$(date --date="6 months ago" "+%Y-%m-%d")
-​
+        git branch -r --format="%(committerdate:iso8601) %(refname:short)" --sort="-committerdate" | ForEach-Object {
+          $branch = $_ -split " "
+          $branch_name = $branch[1]
+          $last_commit_date = $branch[0]
+          $six_months_ago = (Get-Date).AddMonths(-6)
+
           # Check if the branch should be excluded from deletion
-          excluded=false
-          for excluded_branch in "${excluded_branches[@]}"; do
-            if [ "$branch_name" = "$excluded_branch" ]; then
-              excluded=true
+          $excluded = $false
+          foreach ($excluded_branch in $excluded_branches) {
+            if ($branch_name -eq $excluded_branch) {
+              $excluded = $true
               break
-            fi
-          done
-​
+            }
+          }
+
           # Delete the branch if it's older than 6 months and not excluded
-          if [ "$last_commit_date" \< "$six_months_ago" ] && [ "$excluded" = false ]; then
-            git push origin --delete "$branch_name"
-          fi
-        done <<< "$(git branch -r --format='%(committerdate:iso8601) %(refname:short)' --sort='-committerdate')"
+          if (($last_commit_date -lt $six_months_ago) -and (-not $excluded)) {
+            git push origin --delete $branch_name
+          }
+        }
