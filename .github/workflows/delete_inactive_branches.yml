@@ -1,58 +1,28 @@
-name: Delete inactive branches
+name: Delete Old Branches
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs every day at 11:30 AM UTC
+    - cron: "0 0 * * *" # Runs every hour
 
 jobs:
-  delete_inactive_branches:
+  delete_old_branches:
     runs-on: windows-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: List branches
-      run: |
-        git fetch --prune --quiet
-        git branch -r --format="%(committerdate:iso8601) %(refname:short)" --sort="-committerdate"
+      - name: Delete old branches
+        run: |
+          EXCEPTION_FILE="exceptions.txt"
+          OLD_BRANCHES=$(git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' refs/heads/ |
+                          awk -v date="$(date --date='24 hours ago' --iso-8601=seconds)" '$2 < date {print $1}')
 
-    - name: Read excluded branches from file
-      id: read_excluded_branches
-      run: |
-        Get-Content excluded_branches.txt
+          if [ -f "$EXCEPTION_FILE" ]; then
+              EXCEPTION_BRANCHES=$(< "$EXCEPTION_FILE")
+              # Filter out branches listed in exceptions.txt
+              OLD_BRANCHES=$(comm -23 <(echo "$OLD_BRANCHES" | sort) <(echo "$EXCEPTION_BRANCHES" | sort))
+          fi
 
-    - name: Delete inactive branches
-      run: |
-        # Read excluded branches from the output of the previous step
-        $excluded_branches = Get-Content excluded_branches.txt
-
-        # Loop through branches and delete those inactive for more than 24 hours
-        git branch -r --format="%(committerdate:iso8601) %(refname:short)" --sort="-committerdate" | ForEach-Object {
-          $branch = $_ -split ' ', 2
-          $branch_name = $branch[1].Trim()
-
-          # Check if the branch should be excluded from deletion
-          $excluded = $false
-          foreach ($excluded_branch in $excluded_branches) {
-            if ($branch_name -eq $excluded_branch) {
-              $excluded = $true
-              break
-            }
-          }
-
-          # Delete the branch if it's older than 24 hours and not excluded
-          if ([string]::IsNullOrWhiteSpace($branch_name)) {
-            Write-Host "Invalid branch name: $branch_name"
-          } else {
-            # Get the last commit date for the branch
-            $last_commit_date = git log -n 1 --format="%ci" $branch_name
-
-            # Calculate 24 hours ago
-            $twenty_four_hours_ago = (Get-Date).AddDays(-1)
-
-            if ($last_commit_date -lt $twenty_four_hours_ago -and -not $excluded) {
-              git push origin --delete $branch_name
-            }
-          }
-        }
+          for branch in $OLD_BRANCHES; do
+              git branch -d "$branch"
+          done
