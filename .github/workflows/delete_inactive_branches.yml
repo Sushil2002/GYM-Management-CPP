@@ -16,24 +16,32 @@ jobs:
         shell: bash
         run: |
           git fetch --prune --unshallow
-          git branch -r --format="%(refname:short) %(committerdate:short)" | grep -v "HEAD" | while read branch; do
-            branch_name=$(echo "$branch" | awk '{print $1}')
-            last_commit_date=$(echo "$branch" | awk '{print $2}')
-            if [[ $last_commit_date < "$(date -d 'yesterday' +'%Y-%m-%d')" ]]; then
-              echo "$branch_name" >> AllBranches.txt
-            fi
-          done
+          git branch -r --format="%(refname:short) %(committerdate:short)" | grep -v "HEAD" | ForEach-Object {
+            $branch = $_ -split '\s+', 2
+            $branch_name = $branch[0]
+            $last_commit_date = $branch[1]
+            if ($last_commit_date -lt (Get-Date).AddDays(-1).ToString("yyyy-MM-dd")) {
+              Add-Content -Path "AllBranches.txt" -Value $branch_name
+            }
+          }
 
       - name: Remove exceptions
         shell: bash
         run: |
-          while IFS= read -r branch; do
-            sed -i "/$branch/d" AllBranches.txt
-          done < exceptions.txt
+          Get-Content exceptions.txt | ForEach-Object {
+            $branch = $_
+            (Get-Content -Path "AllBranches.txt") -notmatch $branch | Set-Content -Path "AllBranches.txt"
+          }
 
       - name: Delete branches
         shell: bash
         run: |
-          while IFS= read -r branch; do
-            git push --delete origin "$branch"
-          done < AllBranches.txt
+          Get-Content AllBranches.txt | ForEach-Object {
+            $branch = $_
+            git push --delete origin $branch
+          }
+
+      - name: Clear AllBranches.txt
+        shell: bash
+        run: |
+          Clear-Content -Path "AllBranches.txt"
