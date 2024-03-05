@@ -13,30 +13,30 @@ jobs:
         uses: actions/checkout@v2
 
       - name: List branches and filter
-        shell: bash
         run: |
-          git fetch --prune --unshallow
-          git branch -r --format="%(refname:short) %(committerdate:short)" | grep -v "HEAD" | while read branch date; do
-            if [[ "$date" < "$(date -d '-1 day' +%Y-%m-%d)" ]]; then
-              echo "$branch" >> AllBranches.txt
+          bash -c "git fetch --prune --unshallow
+          git branch -r --format='%(refname:short) %(committerdate:short)' | grep -v 'HEAD' | while read branch date; do
+            if [[ '$date' < '$(date -d '-1 day' +%Y-%m-%d)' ]]; then
+              echo '$branch' >> AllBranches.txt
             fi
-          done
+          done"
+        shell: bash
 
       - name: Remove exceptions
-        shell: bash
         run: |
-          while IFS= read -r branch; do
-            grep -v "$branch" AllBranches.txt > tmpfile && mv tmpfile AllBranches.txt
-          done < exceptions.txt
+          bash -c "while IFS= read -r branch; do
+            grep -v '$branch' AllBranches.txt > tmpfile && mv tmpfile AllBranches.txt
+          done < exceptions.txt"
+        shell: bash
 
       - name: Delete branches
-        shell: bash
         run: |
-          while IFS= read -r branch; do
-            git push --delete origin "$branch"
-          done < AllBranches.txt
+          bash -c "while IFS= read -r branch; do
+            git push --delete origin '$branch'
+          done < AllBranches.txt"
+        shell: bash
 
       - name: Clear AllBranches.txt
-        shell: bash
         run: |
-          > AllBranches.txt
+          bash -c "> AllBranches.txt"
+        shell: bash
